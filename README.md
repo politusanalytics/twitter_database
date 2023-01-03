@@ -10,9 +10,17 @@ There are two collections: users and tweets
 * "description": Twitter description(bio) of the user
 * "name": Twitter name of the user
 * "screen_name": Twitter screen name of the user
+* "created_at": The date account was created
+* "province_codes": Province code of the user's city
+* "genders": Gender of the user
 * "following": The user ids that the user follows
 * "followers": The user ids that follow the user
 * "tweets": Tweets of the user. Each tweet is an object that contains "tweet_date", "type" and may contain "tweet_id" and/or "ref_tweet_id"
+* "followers_count": Follower count of the user
+* "following_count": Following count of the user
+* "pp": Profile image URL of the user
+* "downloaded": The date user was downloaded
+* "demog_pred": Demographic predictions (gender, is_organization, age) of the user
 
 ### Tweets
 Each tweet has:
