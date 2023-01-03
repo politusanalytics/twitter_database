@@ -39,6 +39,7 @@ with gzip.open(input_filename, "rb") as f:
                                   "date": tweet_obj["ref_twt_date"],
                                   #"senti": tweet_obj["ref_senti"], "n_ent": tweet_obj["ref_n_ent"]
                                  }
+                insert_if_does_not_exist(tweet_col, to_be_inserted)
             elif tweet_obj["type"] in ["quote", "reply"]:
                 curr_user_tweet = {"type": tweet_obj["type"], "date": tweet_obj["twt_date"], "ref_date": tweet_obj["ref_twt_date"]}
                 to_be_inserted = {"_id": tweet_obj["twt_id_str"], "text": tweet_obj["twt_txt"],
