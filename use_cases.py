@@ -23,11 +23,17 @@ def write_results_to_file(result: mongo_result, out_filename: str) -> None:
         for row in result:
             f.write(json.dumps(row, ensure_ascii=False) + "\n")
 
+def print_result(result: mongo_result, row_limit: Optional[int] = 1000) -> None:
+    for i, row in enumerate(result):
+        print(row)
+        if i == row_limit:
+            break
+
 # def insert_one_if_does_not_exist(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
 #     if not collection.find_one({"_id": to_be_inserted["_id"]}):
 #         collection.insert_one(to_be_inserted)
 
-# def insert_one_or_update(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
+# def insert_one_or_replace(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
 #     collection.replaceOne({"_id": to_be_inserted["_id"]}, to_be_inserted, {upsert: true})
 
 # Note that "_id" column is always returned
@@ -47,16 +53,8 @@ def get_users_with_tweet_types(tweet_types: List[str], columns_to_return: List[s
     result = user_col.find(filter={"tweets.type": {"$in": tweet_types}}, projection=columns_to_return)
     return result
 
-def get_user_with_id(user_id: str, columns_to_return: List[str] = []) -> mongo_result:
-    result = user_col.find_one(filter={"_id": user_id}, projection=columns_to_return)
-    return result
-
 def get_users_with_ids(user_ids: List[str], columns_to_return: List[str] = []) -> mongo_result:
     result = user_col.find(filter={"_id": {"$in": user_ids}}, projection=columns_to_return)
-    return result
-
-def get_tweet_with_id(tweet_id: str, columns_to_return: List[str] = []) -> mongo_result:
-    result = tweet_col.find_one(filter={"_id": tweet_id}, projection=columns_to_return)
     return result
 
 def get_tweets_with_ids(tweet_ids: List[str], columns_to_return: List[str] = []) -> mongo_result:
@@ -105,10 +103,9 @@ def get_users_with_tweets_between_dates(start_date: str, end_date: str,
 
     return result
 
-
 def filter_str_or_list(list_or_str_filter: List[str]) -> Dict:
     if len(list_or_str_filter) == 1:
-        return list_or_str_filter
+        return list_or_str_filter[0]
     else:
         return {"$in": list_or_str_filter}
 
@@ -123,7 +120,8 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
                       description: Optional[str] = None, name: Optional[str] = None,
                       screen_name: Optional[str] = None, following: Optional[List[str]] = None,
                       followers: Optional[List[str]] = None, tweet_types: Optional[List[str]] = None,
-                      tweet_date=None, tweet_ids: Optional[List[str]] = None) -> mongo_result:
+                      tweet_date=None, tweet_ids: Optional[List[str]] = None,
+                      columns_to_return: Optional[List[str]] = []) -> mongo_result:
     """
     - ids: User id or ids.
     - locations: This is the location(s) of the user.
@@ -148,9 +146,9 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
         curr_filters["_id"] = filter_str_or_list(ids)
     if (locations is not None) and len(locations) != 0:
         curr_filters["location"] = filter_str_or_list(locations)
-    if (following is not None) and len(following) != 0: # TODO: Is this correct?
+    if (following is not None) and len(following) != 0:
         curr_filters["following"] = filter_str_or_list(following)
-    if (followers is not None) and len(followers) != 0: # TODO: Is this correct?
+    if (followers is not None) and len(followers) != 0:
         curr_filters["followers"] = filter_str_or_list(followers)
     if (tweet_types is not None) and len(tweet_types) != 0:
         curr_filters["tweets.type"] = filter_str_or_list(tweet_types)
@@ -166,11 +164,12 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
     if screen_name is not None:
         curr_filters["screen_name"] = filter_regex(screen_name)
 
-    # TODO: Must think about projection as well!
-    result = user_col.find(filter=curr_filters)
+    # QUESTION: If tweet_types is not None, should we change projection to only return tweets with the
+    # given tweet_types?
+    result = user_col.find(filter=curr_filters, projection=columns_to_return)
     return result
 
-def generic_get_tweets(text: Optional(str) = None, date=None, ids: Optional(List[str]) = None,
+def generic_get_tweets(text: Optional[str] = None, date=None, ids: Optional[List[str]] = None,
                        columns_to_return: List[str] = []) -> mongo_result:
     # NOTE: This will probably get populated with various model prediction outputs.
     """
@@ -197,27 +196,74 @@ def generic_get_tweets(text: Optional(str) = None, date=None, ids: Optional(List
     return result
 
 if __name__ == "__main__":
+    # Necessary stuff for testing
+    with open("test/test_tweet_ids.txt", "r") as f:
+        test_tweet_ids = [str(tweet_id) for tweet_id in f.read().split(",")]
+    with open("test/test_user_ids.txt", "r") as f:
+        test_user_ids = [str(user_id) for user_id in f.read().split(",")]
+
     # Test stuff
     result1 = get_all_tweets()
-    result2 = get_users_with_tweet_ids(["123132", "345654342", "898129718923"])
-    result3 = get_tweets_between_dates("2022-07-12", "2020-03-21")
-    result4 = get_users_with_tweets_between_dates("2022-07-12", "2020-03-21")
-    result5 = get_tweets_with_ids(["123132", "345654342", "898129718923"])
-    result6 = get_tweet_with_id("123132")
-    result7 = get_users_with_ids(["439349", "192391239132", "943989"])
-    result8 = get_user_with_id("439349")
-    result9 = get_users_with_tweet_types(["fav", "quote", "original"])
-    result0 = get_users_with_tweet_type("original")
-
-
-    # Same stuff with generics
+    print("get_all_tweets:")
+    print_result(result1, row_limit=3)
+    print("---------------")
     result1 = generic_get_tweets()
-    result2 = generic_get_users(tweet_ids=["123132", "345654342", "898129718923"])
-    result3 = generic_get_tweets(date=["2022-07-12", "2020-03-21"])
-    result4 = generic_get_users(tweet_date=["2022-07-12", "2020-03-21"])
-    result5 = generic_get_tweets(ids=["123132", "345654342", "898129718923"])
-    result6 = generic_get_tweets(ids=["123132"])
-    result7 = generic_get_users(ids=["439349", "192391239132", "943989"])
-    result8 = generic_get_users(ids=["439349"])
-    result9 = generic_get_users(tweet_types=["fav", "quote", "original"])
-    result0 = generic_get_users(tweet_types=["original"])
+    print("generic get_all_tweets:")
+    print_result(result1, row_limit=3)
+    print("===============")
+    result2 = get_users_with_tweet_ids(test_tweet_ids)
+    print("get_users_with_tweet_ids:")
+    print_result(result2, row_limit=3)
+    print("---------------")
+    result2 = generic_get_users(tweet_ids=test_tweet_ids)
+    print("generic get_users_with_tweet_ids:")
+    print_result(result2, row_limit=3)
+    print("===============")
+    result3 = get_tweets_between_dates("2020-07-12", "2021-03-21")
+    print("get_tweets_between_dates:")
+    print_result(result3, row_limit=3)
+    print("---------------")
+    result3 = generic_get_tweets(date=["2020-07-12", "2021-03-21"])
+    print("generic get_tweets_between_dates:")
+    print_result(result3, row_limit=3)
+    print("===============")
+    result4 = get_users_with_tweets_between_dates("2020-07-12", "2021-03-21")
+    print("get_users_with_tweets_between_dates:")
+    print_result(result4, row_limit=3)
+    print("---------------")
+    result4 = generic_get_users(tweet_date=["2020-07-12", "2021-03-21"])
+    print("generic get_users_with_tweets_between_dates:")
+    print_result(result4, row_limit=3)
+    print("===============")
+    result5 = get_tweets_with_ids(test_tweet_ids)
+    print("get_tweets_with_ids:")
+    print_result(result5, row_limit=3)
+    print("---------------")
+    result5 = generic_get_tweets(ids=test_tweet_ids)
+    print("generic get_tweets_with_ids:")
+    print_result(result5, row_limit=3)
+    print("===============")
+    result6 = get_users_with_ids(test_user_ids)
+    print("get_users_with_ids:")
+    print_result(result6, row_limit=3)
+    print("---------------")
+    result6 = generic_get_users(ids=test_user_ids)
+    print("generic get_users_with_ids:")
+    print_result(result6, row_limit=3)
+    print("===============")
+    result7 = get_users_with_tweet_types(["fav", "quote", "original"])
+    print("get_users_with_tweet_types:")
+    print_result(result7, row_limit=3)
+    print("---------------")
+    result7 = generic_get_users(tweet_types=["fav", "quote", "original"])
+    print("generic get_users_with_tweet_types:")
+    print_result(result7, row_limit=3)
+    print("===============")
+    result8 = get_users_with_tweet_type("original")
+    print("get_users_with_tweet_type:")
+    print_result(result8, row_limit=3)
+    print("---------------")
+    result8 = generic_get_users(tweet_types=["original"])
+    print("generic get_users_with_tweet_type:")
+    print_result(result8, row_limit=3)
+    print("===============")
