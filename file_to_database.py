@@ -2,6 +2,7 @@ import pymongo
 import gzip
 import json
 import sys
+from use_cases import insert_if_does_not_exist
 
 # Connect to mongodb
 mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
@@ -11,15 +12,6 @@ user_col = db["users"]
 tweet_col = db["tweets"]
 
 input_filename = sys.argv[1] # currently accepts only gz files
-
-
-def insert_if_does_not_exist(collection, to_be_inserted):
-    if not collection.find_one({"_id": to_be_inserted["_id"]}):
-        collection.insert_one(to_be_inserted)
-
-def insert_or_update(collection, to_be_inserted):
-    collection.replaceOne({"_id": to_be_inserted["_id"]}, to_be_inserted, {upsert: true})
-
 
 with gzip.open(input_filename, "rb") as f:
     for user in f:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 import pymongo
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 import dateutil.parser
 
 """
@@ -29,12 +29,34 @@ def print_result(result: mongo_result, row_limit: Optional[int] = 1000) -> None:
         if i == row_limit:
             break
 
-# def insert_one_if_does_not_exist(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
-#     if not collection.find_one({"_id": to_be_inserted["_id"]}):
-#         collection.insert_one(to_be_inserted)
 
-# def insert_one_or_replace(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
-#     collection.replaceOne({"_id": to_be_inserted["_id"]}, to_be_inserted, {upsert: true})
+def insert_one_if_does_not_exist(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
+    if not collection.find_one({"_id": to_be_inserted["_id"]}):
+        collection.insert_one(to_be_inserted)
+
+def insert_one_or_replace(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
+    """
+    Directly replace the row if given _id exists. Note that this will completely overwrite the existing
+    data.
+    """
+    collection.replaceOne({"_id": to_be_inserted["_id"]}, to_be_inserted, {upsert: true})
+
+def insert_one_or_update(collection: pymongo.collection.Collection, to_be_updated: Dict) -> None:
+    """
+    Update the row if given _id exists. Note that this will only overwrite given columns in the
+    to_be_updated, and write new columns.
+    """
+    collection.update_one({"_id": to_be_updated["_id"]}, {"$set": to_be_updated}, upsert=True)
+
+def update_one(collection: pymongo.collection.Collection, to_be_updated: Dict) -> None:
+    collection.update_one({"_id": to_be_updated["_id"]}, {"$set": to_be_updated})
+
+# TODO: Should we divide this function further into update_by_regex, update_by_match, update_by_element
+# etc?
+def update_many_by_filter(collection: pymongo.collection.Collection, update_filter: Dict,
+                          to_be_updated: Dict) -> None:
+    collection.update_one(update_filter, {"$set": to_be_updated})
+
 
 # Note that "_id" column is always returned
 def get_all_tweets(columns_to_return: List[str] = []) -> mongo_result:
@@ -103,11 +125,11 @@ def get_users_with_tweets_between_dates(start_date: str, end_date: str,
 
     return result
 
-def filter_str_or_list(list_or_str_filter: List[str]) -> Dict:
-    if len(list_or_str_filter) == 1:
-        return list_or_str_filter[0]
+def filter_direct_match(list_or_filter: List[Any]) -> Dict:
+    if len(list_or_filter) == 1:
+        return list_or_filter[0]
     else:
-        return {"$in": list_or_str_filter}
+        return {"$in": list_or_filter}
 
 # both dates are inclusive, and with format 'YYYY-MM-DD'
 def filter_between_dates(start_date: str, end_date: str) -> Dict:
@@ -118,9 +140,11 @@ def filter_regex(regex_pattern: str, options: str = "si") -> Dict:
 
 def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[str]] = None,
                       description: Optional[str] = None, name: Optional[str] = None,
-                      screen_name: Optional[str] = None, following: Optional[List[str]] = None,
+                      screen_name: Optional[str] = None, user_creation_date=None,
+                      pcode: Optional[List[int]] = None, following: Optional[List[str]] = None,
                       followers: Optional[List[str]] = None, tweet_types: Optional[List[str]] = None,
                       tweet_date=None, tweet_ids: Optional[List[str]] = None,
+                      min_followers_count: Optional[int] = None, max_followers_count: Optional[int] = None,
                       columns_to_return: Optional[List[str]] = []) -> mongo_result:
     """
     - ids: User id or ids.
@@ -128,11 +152,15 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
     - description: Must be a regex pattern.
     - name: Must be a regex pattern.
     - screen_name: Must be a regex pattern.
+    - user_creation_date: Must be a list of two elements, with starting date and ending date.
+    - pcode: This represent the province code(s) of the location of the user.
     - following: User id or ids.
     - followers: User id or ids.
     - tweet_types: Tweet type or types.
     - tweet_date: Must be a list of two elements, with starting date and ending date.
     - tweet_ids: Tweet id or ids.
+    - min_followers_count: Minimum number of followers of the user.
+    - max_followers_count: Maximum number of followers of the user.
     """
 
     if (tweet_ids is not None) and ((tweet_types is not None) or (tweet_date is not None)):
@@ -143,20 +171,28 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
     curr_filters = {}
 
     if (ids is not None) and (len(ids) != 0):
-        curr_filters["_id"] = filter_str_or_list(ids)
+        curr_filters["_id"] = filter_direct_match(ids)
     if (locations is not None) and len(locations) != 0:
-        curr_filters["location"] = filter_str_or_list(locations)
+        curr_filters["location"] = filter_direct_match(locations)
+    if user_creation_date is not None:
+        curr_filters["created_at"] = filter_between_dates(user_creation_date[0], user_creation_date[1])
+    if pcode is not None:
+        curr_filters["province_codes.pcode"] = filter_direct_match(pcode)
     if (following is not None) and len(following) != 0:
-        curr_filters["following"] = filter_str_or_list(following)
+        curr_filters["following"] = filter_direct_match(following)
     if (followers is not None) and len(followers) != 0:
-        curr_filters["followers"] = filter_str_or_list(followers)
+        curr_filters["followers"] = filter_direct_match(followers)
     if (tweet_types is not None) and len(tweet_types) != 0:
-        curr_filters["tweets.type"] = filter_str_or_list(tweet_types)
+        curr_filters["tweets.type"] = filter_direct_match(tweet_types)
     if (tweet_ids is not None) and len(tweet_ids) != 0:
-        filt = filter_str_or_list(tweet_ids)
+        filt = filter_direct_match(tweet_ids)
         curr_filters["$or"] = [{"tweets.twt_id_str": filt}, {"tweets.ref_twt_id_str": filt}]
     if tweet_date is not None:
         curr_filters["tweets.date"] = filter_between_dates(tweet_date[0], tweet_date[1])
+    if min_followers_count is not None:
+        curr_filters["followers_count"] = {"$gte": min_followers_count} # Inclusive
+    if max_followers_count is not None:
+        curr_filters["followers_count"] = {"$lte": max_followers_count} # Inclusive
     if description is not None:
         curr_filters["description"] = filter_regex(description)
     if name is not None:
@@ -186,7 +222,7 @@ def generic_get_tweets(text: Optional[str] = None, date=None, ids: Optional[List
     curr_filters = {}
 
     if (ids is not None) and (len(ids) != 0):
-        curr_filters["_id"] = filter_str_or_list(ids)
+        curr_filters["_id"] = filter_direct_match(ids)
     if date is not None:
         curr_filters["date"] = filter_between_dates(date[0], date[1])
     if text is not None:
@@ -194,6 +230,7 @@ def generic_get_tweets(text: Optional[str] = None, date=None, ids: Optional[List
 
     result = tweet_col.find(filter=curr_filters, projection=columns_to_return)
     return result
+
 
 if __name__ == "__main__":
     # Necessary stuff for testing
@@ -266,4 +303,17 @@ if __name__ == "__main__":
     result8 = generic_get_users(tweet_types=["original"])
     print("generic get_users_with_tweet_type:")
     print_result(result8, row_limit=3)
+    print("===============")
+
+    result9 = generic_get_users(user_creation_date=["2019-02-12", "2022-03-21"])
+    print("generic user_creation_date:")
+    print_result(result9, row_limit=3)
+    print("===============")
+    result10 = generic_get_users(pcode=[34])
+    print("generic pcode:")
+    print_result(result10, row_limit=3)
+    print("===============")
+    result11 = generic_get_users(min_followers_count=5, max_followers_count=100)
+    print("generic min and max followers_count:")
+    print_result(result11, row_limit=3)
     print("===============")
