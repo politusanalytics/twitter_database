@@ -2,7 +2,7 @@ import pymongo
 import gzip
 import json
 import sys
-from use_cases import insert_if_does_not_exist
+from common import insert_if_does_not_exist
 
 # Connect to mongodb
 mongo_client = pymongo.MongoClient("mongodb://localhost:27017/")
