@@ -61,8 +61,11 @@ def date_converter(date_string):
     """
     Converts date in "YYMMDD" format to datetime.datetime object.
     """
-    date_string = "20" + date_string[:2] + "/" + date_string[2:4] + "/" + date_string[4:6]
-    return dateutil.parser.parse(date_string, yearfirst=True, dayfirst=False)
+    if date_string:
+        date_string = "20" + date_string[:2] + "/" + date_string[2:4] + "/" + date_string[4:6]
+        return dateutil.parser.parse(date_string, yearfirst=True, dayfirst=False)
+    else:
+        return ""
 
 
 # Note that "_id" column is always returned
