@@ -57,6 +57,13 @@ def update_many_by_filter(collection: pymongo.collection.Collection, update_filt
                           to_be_updated: Dict) -> None:
     collection.update_one(update_filter, {"$set": to_be_updated})
 
+def date_converter(date_string):
+    """
+    Converts date in "YYMMDD" format to datetime.datetime object.
+    """
+    date_string = "20" + date_string[:2] + "/" + date_string[2:4] + "/" + date_string[4:6]
+    return dateutil.parser.parse(date_string, yearfirst=True, dayfirst=False)
+
 
 # Note that "_id" column is always returned
 def get_all_tweets(columns_to_return: List[str] = []) -> mongo_result:
