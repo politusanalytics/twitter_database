@@ -53,13 +53,10 @@ with gzip.open(input_filename, "rb") as f:
             insert_if_does_not_exist(user_col, {"_id": user["id_str"], "location": user["location"],
                                                 "description": user["description"], "name": user["name"],
                                                 "screen_name": user["screen_name"], "created_at": user["created_at"],
-                                                "province_codes":user["province_codes"], "genders": user["genders"],
                                                 "following": user["following"], "followers": user["followers"],
                                                 "tweets": curr_user_tweets, "followers_count": user["followers_count"],
                                                 "following_count": user["following_count"], "pp": user["pp"],
                                                 "downloaded": date_converter(user["downloaded"]),
-                                                "demog_pred_txt": user["demog_pred"][0]["txt_pred"],
-                                                "demog_pred_full": user["demog_pred"][0]["full_pred"],
                                                 "kadikoy":True})
         else:
             insert_if_does_not_exist(user_col, {"_id": user["id_str"], "location": user["location"],
