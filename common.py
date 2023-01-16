@@ -25,9 +25,9 @@ def write_results_to_file(result: mongo_result, out_filename: str) -> None:
 
 def print_result(result: mongo_result, row_limit: Optional[int] = 1000) -> None:
     for i, row in enumerate(result):
-        print(row)
         if i == row_limit:
             break
+        print(row)
 
 
 def insert_one_if_does_not_exist(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
@@ -88,8 +88,29 @@ def get_tweets_between_dates(start_date: str, end_date: str, columns_to_return: 
     Both start_date and end_date should be in format "YYYY-MM-DD".
     Also note that both dates are inclusive.
     """
-    result = tweet_col.find(filter={"date": {"$gte": dateutil.parser.parse(start_date), "$lte": dateutil.parser.parse(end_date)}},
+    # result = tweet_col.find(filter={"date": {"$gte": dateutil.parser.parse(start_date), "$lte": dateutil.parser.parse(end_date)}},
+    #                         projection=columns_to_return)
+    result = tweet_col.find(filter={"date": {"$gte": dateutil.parser.parse(start_date),
+                                             "$lte": dateutil.parser.parse(end_date)}
+                                   },
                             projection=columns_to_return)
+    return result
+
+def get_tweets_of_users(user_ids: List[str], columns_to_return: List[str] = []) -> mongo_result:
+    usr_result = user_col.find(filter={"_id": {"$in": user_ids}}, projection=["tweets"])
+    tweet_ids = []
+    for row in usr_result:
+        for tweet_obj in row["tweets"]:
+            twt_id = tweet_obj.get("id", "")
+            ref_twt_id = tweet_obj.get("ref_id", "")
+            if twt_id:
+                tweet_ids.append(twt_id)
+            if ref_twt_id:
+                tweet_ids.append(ref_twt_id)
+
+    tweet_ids = list(set(tweet_ids))
+    result = get_tweets_with_ids(tweet_ids, columns_to_return)
+
     return result
 
 def get_users_with_tweet_ids(tweet_ids: List[str], columns_to_return: List[str] = []) -> mongo_result:
@@ -98,14 +119,14 @@ def get_users_with_tweet_ids(tweet_ids: List[str], columns_to_return: List[str] 
     """
     # result = user_col.find(filter={"tweets":
     #                                 {$elemMatch:
-    #                                   {$or: [{"twt_id_str": {$in: tweet_ids}},
-    #                                          {"ref_twt_id_str": {$in: tweet_ids}}]
+    #                                   {$or: [{"id": {$in: tweet_ids}},
+    #                                          {"ref_id": {$in: tweet_ids}}]
     #                                   }
     #                                 }
     #                               },
     #                        projection=columns_to_return)
-    result = user_col.find(filter={"$or": [{"tweets.twt_id_str": {"$in": tweet_ids}},
-                                           {"tweets.ref_twt_id_str": {"$in": tweet_ids}},]},
+    result = user_col.find(filter={"$or": [{"tweets.id": {"$in": tweet_ids}},
+                                           {"tweets.ref_id": {"$in": tweet_ids}},]},
                            projection=columns_to_return)
     return result
 
@@ -120,7 +141,9 @@ def get_users_with_tweets_between_dates(start_date: str, end_date: str,
     # result = get_users_with_tweet_ids(result_tweet_ids, columns_to_return=columns_to_return)
 
     # Second way
-    result = user_col.find(filter={"tweets.date": {"$gte": dateutil.parser.parse(start_date), "$lte": dateutil.parser.parse(end_date)}},
+    result = user_col.find(filter={"tweets": {"$elemMatch": {"date": {"$gte": dateutil.parser.parse(start_date),
+                                                                      "$lte": dateutil.parser.parse(end_date)}}},
+                                  },
                            projection=columns_to_return)
 
     return result
@@ -144,7 +167,8 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
                       pcode: Optional[List[int]] = None, following: Optional[List[str]] = None,
                       followers: Optional[List[str]] = None, tweet_types: Optional[List[str]] = None,
                       tweet_date=None, tweet_ids: Optional[List[str]] = None,
-                      min_followers_count: Optional[int] = None, max_followers_count: Optional[int] = None,
+                      kadikoy: Optional[bool] = None, min_followers_count: Optional[int] = None,
+                      max_followers_count: Optional[int] = None,
                       return_only_filter_element: bool = False,
                       columns_to_return: Optional[List[str]] = []) -> mongo_result:
     """
@@ -158,13 +182,15 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
     - following: User id or ids.
     - followers: User id or ids.
     - tweet_types: Tweet type or types.
-    - tweet_date: Must be a list of two elements, with starting date and ending date.
+    - tweet_date: Must be a list of two elements, with starting date and ending date. Both start_date
+    and end_date should be in format "YYYY-MM-DD". Also note that both dates are inclusive.
     - tweet_ids: Tweet id or ids.
+    - kadikoy: Whether the user is from Kadikoy or not. Direct filter for 'kadikoy' field.
     - min_followers_count: Minimum number of followers of the user.
     - max_followers_count: Maximum number of followers of the user.
     - return_only_filter_element: When you have a filter for elements of the columns
-    (e.g. tweet_type, tweet_ids), you may want to only get the filtered elements instead of getting all
-     of the elements (getting only tweets with type original instead of getting all tweets).
+    (tweet_type, tweet_ids, tweet_date), you may want to only get the filtered elements instead of
+    getting all of the elements (getting only tweets with type original instead of getting all tweets).
     """
 
     if (tweet_ids is not None) and ((tweet_types is not None) or (tweet_date is not None)):
@@ -174,8 +200,8 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
 
     curr_filters = {}
     projection = {}
-    if return_only_filter_element:
-        projection["_id"] = True # Alway return _id
+    if len(columns_to_return) > 0:
+        projection["_id"] = True # Always return _id
         for column in columns_to_return:
             projection[column] = True
 
@@ -197,13 +223,16 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
             projection["tweets"] = {"$elemMatch": {"type": filter_direct_match(tweet_types)}}
     if (tweet_ids is not None) and len(tweet_ids) != 0:
         filt = filter_direct_match(tweet_ids)
-        curr_filters["$or"] = [{"tweets.twt_id_str": filt}, {"tweets.ref_twt_id_str": filt}]
+        curr_filters["$or"] = [{"tweets.id": filt}, {"tweets.ref_id": filt}]
         if return_only_filter_element:
-            projection["tweets"] = {"$elemMatch": {"$or": [{"tweets.twt_id_str": filt}, {"tweets.ref_twt_id_str": filt}]}}
+            projection["tweets"] = {"$elemMatch": {"$or": [{"tweets.id": filt}, {"tweets.ref_id": filt}]}}
     if tweet_date is not None:
-        curr_filters["tweets.date"] = filter_between_dates(tweet_date[0], tweet_date[1])
+        # NOTE: $elemMatch is necessary here, because we have more than 1 filter for "tweets.date"!
+        curr_filters["tweets"] = {"$elemMatch": {"date": filter_between_dates(tweet_date[0], tweet_date[1])}}
         if return_only_filter_element:
             projection["tweets"] = {"$elemMatch": {"date": filter_between_dates(tweet_date[0], tweet_date[1])}}
+    if kadikoy is not None:
+        curr_filters["kadikoy"] = kadikoy
     if min_followers_count is not None:
         curr_filters["followers_count"] = {"$gte": min_followers_count} # Inclusive
     if max_followers_count is not None:
@@ -269,7 +298,7 @@ if __name__ == "__main__":
     print("generic get_users_with_tweet_ids:")
     print_result(result2, row_limit=3)
     print("---------------")
-    result2 = generic_get_users(tweet_ids=test_tweet_ids, return_only_filter_element=True)
+    result2 = generic_get_users(tweet_ids=test_tweet_ids, return_only_filter_element=True, columns_to_return=["tweets"])
     print("generic get_users_with_tweet_ids return_only_filter_element:")
     print_result(result2, row_limit=3)
     print("===============")
@@ -345,4 +374,9 @@ if __name__ == "__main__":
     result11 = generic_get_users(min_followers_count=5, max_followers_count=100)
     print("generic min and max followers_count:")
     print_result(result11, row_limit=3)
+    print("===============")
+
+    result12 = get_tweets_of_users(test_user_ids)
+    print("get_tweets_of_users:")
+    print_result(result12, row_limit=3)
     print("===============")
