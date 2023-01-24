@@ -12,7 +12,8 @@ db = mongo_client["politus_twitter"]
 user_col = db["users"]
 tweet_col = db["tweets"]
 
-input_filename = sys.argv[1] # currently accepts only gz files
+combined_folder = sys.argv[1]
+input_filename = sorted(os.listdir(combined_folder))[-1] # currently accepts only gz files
 
 with gzip.open(input_filename, "rb") as f:
     for user in f:
