@@ -58,6 +58,7 @@ for user in users:
             elif tweet["type"] in ["reply", "quote"]:
                 tweet_ids.append(tweet["id"])
                 tweet_ids.append(tweet["ref_id"])
+tweet_ids = list(set(tweet_ids))
 tweets = generic_get_tweets(ids=tweet_ids, columns_to_return=["text"])
 tweet_texts = [tweet["text"] for tweet in tweets]
 
