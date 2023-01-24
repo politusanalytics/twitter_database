@@ -102,6 +102,9 @@ def preprocess_tweets(tweet_texts):
         # Remove Change.org updates
         if ("via" in tweet_text and "@ChangeTR" in tweet_text) or ("aracılığıyla" in tweet_text and "@ChangeTR" in tweet_text):
             continue
+        # Remove tweets from "withheld" accounts
+        if "account has been withheld" in tweet_text:
+            continue 
         # Remove numbers
         #tweet_text = ''.join([i for i in tweet_text if not i.isdigit()])
         # Remove URLs
