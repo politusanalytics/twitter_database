@@ -16,7 +16,7 @@ tweet_col = db["tweets"]
 combined_folder = sys.argv[1]
 input_filename = sorted(os.listdir(combined_folder))[-1] # currently accepts only gz files
 
-with gzip.open(input_filename, "rb") as f:
+with gzip.open(f"{combined_folder}/{input_filename}", "rb") as f:
     for user in f:
         user = json.loads(user)
         curr_user_tweets = []
