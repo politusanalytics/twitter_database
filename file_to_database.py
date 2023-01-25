@@ -2,6 +2,7 @@ import pymongo
 import gzip
 import json
 import sys
+import os
 from common import insert_one_if_does_not_exist
 from common import date_converter
 
