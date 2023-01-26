@@ -160,7 +160,7 @@ def get_ngrams(tweet_texts, n):
     """
     ngram_tokens = []
     for tweet_text in tweet_texts:
-        ngram_tokens.extend(ngrams(tweet_text, n=n))
+        ngram_tokens.extend(set(ngrams(tweet_text, n=n)))
     ngram_counts = Counter(ngram_tokens).most_common()
     ngram_counts = pd.DataFrame(ngram_counts).rename({0:"word", 1:"count"}, axis=1)
     ngram_counts["word"] = ngram_counts["word"].apply(lambda x: ' '.join(x))
