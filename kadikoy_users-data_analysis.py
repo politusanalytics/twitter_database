@@ -27,6 +27,8 @@ if today not in os.listdir(f"figs/pdf"):
     os.mkdir(f"figs/pdf/{today}")
 if today not in os.listdir(f"figs/png"):
     os.mkdir(f"figs/png/{today}")
+if "logs" not in os.listdir("figs"):
+    os.mkdir("figs/logs")
 
 # Get year and months to filter tweets
 start_date = sys.argv[1]
@@ -50,8 +52,10 @@ tweet_col = db["tweets"]
 # Get tweets
 tweet_ids = []
 users = generic_get_users(kadikoy=True, tweet_date=[start_date, end_date], return_only_filter_element=True, columns_to_return=["tweets"])
+user_count = 0
 for user in users:
     if user["_id"] not in remove_user_ids:
+        user_count += 1
         for tweet in user["tweets"]:
             if tweet["type"] in ["original", "retweet", "fav"]:
                 tweet_ids.append(tweet["id"])
@@ -61,6 +65,7 @@ for user in users:
 tweet_ids = list(set(tweet_ids))
 tweets = generic_get_tweets(ids=tweet_ids, columns_to_return=["text"])
 tweet_texts = [tweet["text"] for tweet in tweets]
+tweet_count = len(tweet_texts)
 
 # Preprocessing
 def remove_emojis(text):
@@ -186,7 +191,12 @@ def visualize_mentions(tweet_texts, start_date, end_date):
     plt.close()
 
 ## N-Grams
-def visualize_ngrams(unigram_counts, bigram_counts, trigram_counts, quadrigram_counts, start_date, end_date):
+def visualize_ngrams(tweet_texts_processed, start_date, end_date):
+
+    unigram_counts = get_ngrams(tweet_texts_processed, n=1)
+    bigram_counts = get_ngrams(tweet_texts_processed, n=2)
+    trigram_counts = get_ngrams(tweet_texts_processed, n=3)
+    quadrigram_counts = get_ngrams(tweet_texts_processed, n=4)
     plt.figure(figsize=(30, 30), dpi=200)
     
     plt.subplot(2, 2, 1)
@@ -221,9 +231,7 @@ tweet_texts_processed = preprocess_tweets(tweet_texts)
 
 visualize_hashtags(tweet_texts_processed, start_date, end_date)
 visualize_mentions(tweet_texts_processed, start_date, end_date)
+visualize_ngrams(tweet_texts_processed, start_date, end_date)
 
-unigram_counts = get_ngrams(tweet_texts_processed, n=1)
-bigram_counts = get_ngrams(tweet_texts_processed, n=2)
-trigram_counts = get_ngrams(tweet_texts_processed, n=3)
-quadrigram_counts = get_ngrams(tweet_texts_processed, n=4)
-visualize_ngrams(unigram_counts, bigram_counts, trigram_counts, quadrigram_counts, start_date, end_date)
+with open(f"figs/logs/logs_{today}_{start_date}_{end_date}.txt", "w+") as f:
+    f.write(f"Date: {today}\nStart Date: {start_date}\nEnd Date: {end_date}\nUser Count: {user_count:,}\nTweet Count: {tweet_count:,}")
