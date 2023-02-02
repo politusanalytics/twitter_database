@@ -171,6 +171,12 @@ def filter_between_dates(start_date: str, end_date: str) -> Dict:
 def filter_regex(regex_pattern: str, options: str = "si") -> Dict:
     return {"$regex": regex_pattern, "options": "<{}>".format(options)}
 
+def filter_boolean(curr_val: bool, default_val: bool = False):
+    if curr_val == default_val:
+        return {"$ne": not curr_val} # since it is the default value, we are including the null as well
+    else:
+        return curr_val
+
 def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[str]] = None,
                       description: Optional[str] = None, name: Optional[str] = None,
                       screen_name: Optional[str] = None, user_creation_date=None,
@@ -210,7 +216,7 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
 
     curr_filters = {}
     projection = {}
-    if len(columns_to_return) > 0:
+    if len(columns_to_return) > 0 or return_only_filter_element:
         projection["_id"] = True # Always return _id
         for column in columns_to_return:
             projection[column] = True
@@ -229,6 +235,7 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
         curr_filters["followers"] = filter_direct_match(followers)
     if (tweet_types is not None) and len(tweet_types) != 0:
         curr_filters["tweets.type"] = filter_direct_match(tweet_types)
+        # TODO: If tweet_date is also a filter, this projection will not work!
         if return_only_filter_element:
             projection["tweets"] = {"$elemMatch": {"type": filter_direct_match(tweet_types)}}
     if (tweet_ids is not None) and len(tweet_ids) != 0:
@@ -238,11 +245,19 @@ def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[
             projection["tweets"] = {"$elemMatch": {"$or": [{"tweets.id": filt}, {"tweets.ref_id": filt}]}}
     if tweet_date is not None:
         # NOTE: $elemMatch is necessary here, because we have more than 1 filter for "tweets.date"!
-        curr_filters["tweets"] = {"$elemMatch": {"date": filter_between_dates(tweet_date[0], tweet_date[1])}}
+        # curr_filters["tweets"] = {"$elemMatch": {"date": filter_between_dates(tweet_date[0], tweet_date[1])}}
+        curr_filters["tweets"] = {"$elemMatch": {"$or": [{"date": filter_between_dates(tweet_date[0], tweet_date[1])},
+                                                         {"ref_date": filter_between_dates(tweet_date[0], tweet_date[1])}]
+                                                }
+                                 }
         if return_only_filter_element:
-            projection["tweets"] = {"$elemMatch": {"date": filter_between_dates(tweet_date[0], tweet_date[1])}}
+            projection["tweets"] = {"$elemMatch": {"$or": [{"date": filter_between_dates(tweet_date[0], tweet_date[1])},
+                                                           {"ref_date": filter_between_dates(tweet_date[0], tweet_date[1])}]
+                                                  }
+                                   }
+            # projection["tweets"] = {"$elemMatch": {"date": filter_between_dates(tweet_date[0], tweet_date[1])}}
     if kadikoy is not None:
-        curr_filters["kadikoy"] = kadikoy
+        curr_filters["kadikoy"] = filter_boolean(kadikoy, default_val=False)
     if min_followers_count is not None:
         curr_filters["followers_count"] = {"$gte": min_followers_count} # Inclusive
     if max_followers_count is not None:
@@ -390,3 +405,18 @@ if __name__ == "__main__":
     print("get_tweets_of_users:")
     print_result(result12, row_limit=3)
     print("===============")
+
+    result13_true = len(list(generic_get_users(kadikoy=True, columns_to_return=["_id"])))
+    result13_false = len(list(generic_get_users(kadikoy=False, columns_to_return=["_id"])))
+    result13_all = len(list(generic_get_users(columns_to_return=["_id"])))
+    assert(result13_true + result13_false == result13_all)
+
+    # TODO: return_only_filter_element is buggy!
+    result14_return_only = len(list(generic_get_users(kadikoy=True, return_only_filter_element=True,
+                                                      tweet_date=["2019-02-12", "2022-03-21"],
+                                                      columns_to_return=["_id"])))
+    result14 = len(list(generic_get_users(kadikoy=True, tweet_date=["2019-02-12", "2022-03-21"],
+                                          columns_to_return=["_id"])))
+    print(result14_return_only)
+    print(result14)
+    assert(result14_return_only == result14)
