@@ -55,7 +55,7 @@ def update_one(collection: pymongo.collection.Collection, to_be_updated: Dict) -
 # etc?
 def update_many_by_filter(collection: pymongo.collection.Collection, update_filter: Dict,
                           to_be_updated: Dict) -> None:
-    collection.update_one(update_filter, {"$set": to_be_updated})
+    collection.update_many(update_filter, {"$set": to_be_updated})
 
 def date_converter(date_string):
     """
@@ -169,13 +169,33 @@ def filter_between_dates(start_date: str, end_date: str) -> Dict:
     return {"$gte": dateutil.parser.parse(start_date), "$lte": dateutil.parser.parse(end_date)}
 
 def filter_regex(regex_pattern: str, options: str = "si") -> Dict:
-    return {"$regex": regex_pattern, "options": "<{}>".format(options)}
+    return {"$regex": regex_pattern, "$options": options}
 
 def filter_boolean(curr_val: bool, default_val: bool = False):
     if curr_val == default_val:
         return {"$ne": not curr_val} # since it is the default value, we are including the null as well
     else:
         return curr_val
+
+def get_self_contained_tweets(columns_to_return: Optional[List[str]] = []) -> mongo_result:
+    users = user_col.find({"tweets.type": filter_direct_match(["reply", "quote"])}, ["_id", "tweets"])
+    reply_and_quote_tweets = {}
+    for user in users:
+        for tweet in user["tweets"]:
+            if tweet["type"] in ["reply", "quote"]:
+                reply_and_quote_tweets[tweet["id"]] = 1
+
+    tweet_filter = {"text": filter_regex("^(?!.*(https:|http:|www\.))")}
+    result = tweet_col.find(tweet_filter, columns_to_return)
+
+    new_result = []
+    for row in result:
+        if reply_and_quote_tweets.get(row["_id"], 0) == 0:
+            text = row["text"]
+            if not (text.startswith("RT") and text.endswith("…") and len(text) >= 139):
+                new_result.append(row)
+
+    return new_result
 
 def generic_get_users(ids: Optional[List[str]] = None, locations: Optional[List[str]] = None,
                       description: Optional[str] = None, name: Optional[str] = None,
@@ -411,12 +431,20 @@ if __name__ == "__main__":
     result13_all = len(list(generic_get_users(columns_to_return=["_id"])))
     assert(result13_true + result13_false == result13_all)
 
-    # TODO: return_only_filter_element is buggy!
-    result14_return_only = len(list(generic_get_users(kadikoy=True, return_only_filter_element=True,
+    # TODO: Is return_only_filter_element buggy?
+    result14_return_only = len(list(generic_get_users(return_only_filter_element=True,
                                                       tweet_date=["2019-02-12", "2022-03-21"],
                                                       columns_to_return=["_id"])))
-    result14 = len(list(generic_get_users(kadikoy=True, tweet_date=["2019-02-12", "2022-03-21"],
+    result14 = len(list(generic_get_users(tweet_date=["2019-02-12", "2022-03-21"],
                                           columns_to_return=["_id"])))
     print(result14_return_only)
     print(result14)
     assert(result14_return_only == result14)
+
+    result15_return_only = len(list(generic_get_users(tweet_types=["original"],
+                                                      return_only_filter_element=True,
+                                                      columns_to_return=["_id"])))
+    result15 = len(list(generic_get_users(tweet_types=["original"], columns_to_return=["_id"])))
+    print(result15_return_only)
+    print(result15)
+    assert(result15_return_only == result15)
