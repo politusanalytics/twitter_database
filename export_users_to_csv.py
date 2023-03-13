@@ -31,7 +31,7 @@ for year in years:
     for month in months:
         unique_dates.append("{}-{}".format(year, month))
 
-weeks = ["0" + str(i) for i in range(1,7)]# + [str(i) for i in range(10,53)]
+weeks = ["0" + str(i) for i in range(1,10)] + [str(i) for i in range(10,11)] # last data is from week 10
 for week in weeks:
     unique_dates.append("2023-week{}".format(week))
 
@@ -46,15 +46,13 @@ db = mongo_client["politus_twitter"]
 user_col = db["users"]
 tweet_col = db["tweets"]
 
-# 1220287 users are not organizations
-# query = {"$or": [{"demog_pred_full.isOrg": {"$lte": 0.5}}, {"demog_pred_txt.isOrg": {"$lte": 0.5}}]}
+# 1013638 users have province_codes and are not organizations
+# query = {"$or": [{"demog_pred_full.isOrg": {"$lte": 0.5}}, {"demog_pred_txt.isOrg": {"$lte": 0.5}}], "province_codes": {"$nin": [None, []]}}
 
-# 1121038 users are not organizations
-query = {"demog_pred_full.isOrg": {"$lte": 0.5}}
+# 939705 users have province_codes and are not organizations
+query = {"province_codes": {"$nin": [None, []]}, "demog_pred_full.isOrg": {"$lte": 0.5}}
 columns_to_return = ["_id", "tweets", "demog_pred_full", "demog_pred_txt", "province_codes"]
 result = user_col.find(query, columns_to_return)
-
-# tweets_with_stance = {tweet["_id"]: tweet["erdogan_stance"] for tweet in tweet_col.find({"erdogan_stance": {"$ne": None}}, ["_id", "erdogan_stance"])}
 
 # unique_dates = []
 write_idx = 0
@@ -80,13 +78,18 @@ for user_idx, user in enumerate(result):
     curr_write.append(age_group)
 
     # get possible locations
-    location = ""
-    if user.get("province_codes", "") != "":
-        possible_locations = Counter()
-        for c in user["province_codes"]:
-            possible_locations[str(c["pcode"])] += 1
-        location = possible_locations.most_common()[0][0]
-    curr_write.append(location)
+    province_codes = {"location": [], "description": [], "screen_name": []}
+    for c in user["province_codes"]:
+        province_codes[c["source"]].append(str(c["pcode"]))
+    if len(province_codes["location"]) > 0:
+        out_pcode = Counter(province_codes["location"]).most_common()[0][0]
+    elif len(province_codes["description"]) > 0:
+        out_pcode = Counter(province_codes["description"]).most_common()[0][0]
+    elif len(province_codes["screen_name"]) > 0:
+        out_pcode = Counter(province_codes["screen_name"]).most_common()[0][0]
+    else:
+        raise("Empty province_codes!")
+    curr_write.append(out_pcode)
 
     # get curr user's tweets' predictions
     tweet_preds = {}
@@ -119,7 +122,7 @@ for user_idx, user in enumerate(result):
         tweets_dict[date+"_total"] += 1
 
         # ideology and topics
-        ideologies, topics, stance = tweet_preds[tweet["id"]]
+        ideologies, topics, stance = tweet_preds.get(tweet["id"], ([], [], ""))
         for ide in ideologies:
             ide = date + "_ide_" + ide
             tweets_dict[ide] += 1
@@ -149,3 +152,5 @@ if write_idx > 0:
     out_file.write(to_be_written)
 
 out_file.close()
+
+# paste -d',' <(cut -d',' -f -5 exported_users.csv) <(cut -d',' -f 1866- exported_users.csv) > exported_users_after_2023.csv
