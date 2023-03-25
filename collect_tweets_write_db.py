@@ -224,7 +224,7 @@ for i, file in enumerate(files):
                 if to_be_inserted_ref["text"] != "":
                     insert_one_or_update(collection=tweet_col, to_be_updated=to_be_inserted_ref)
                 else:
-                    insert_one_if_does_not_exist(collection=tweet_col, to_be_updated=to_be_inserted_ref)
+                    insert_one_if_does_not_exist(collection=tweet_col, to_be_inserted=to_be_inserted_ref)
 
             curr_user_tweets.append(curr_user_tweet)
 
