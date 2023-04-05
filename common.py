@@ -29,6 +29,21 @@ def print_result(result: mongo_result, row_limit: Optional[int] = 1000) -> None:
             break
         print(row)
 
+def get_final_location_from_province_codes(user_province_codes):
+    # get possible locations
+    province_codes = {"location": [], "description": [], "screen_name": []}
+    for c in user_province_codes:
+        province_codes[c["source"]].append(str(c["pcode"]))
+    if len(province_codes["location"]) > 0:
+        out_pcode = Counter(province_codes["location"]).most_common()[0][0]
+    elif len(province_codes["description"]) > 0:
+        out_pcode = Counter(province_codes["description"]).most_common()[0][0]
+    elif len(province_codes["screen_name"]) > 0:
+        out_pcode = Counter(province_codes["screen_name"]).most_common()[0][0]
+    else: #
+        out_pcode = ""
+
+    return out_pcode
 
 def insert_one_if_does_not_exist(collection: pymongo.collection.Collection, to_be_inserted: Dict) -> None:
     if not collection.find_one({"_id": to_be_inserted["_id"]}):
