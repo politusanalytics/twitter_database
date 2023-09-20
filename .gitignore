@@ -4,3 +4,8 @@ test/
 *.csv
 *.json
 *.zip
+for_mrp_test.py
+seccade/
+topic_modelling_egilim_data/
+uskudar_berttopic/
+vjollce/
